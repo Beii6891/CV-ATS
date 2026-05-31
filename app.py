@@ -1,90 +1,112 @@
+```python
 import streamlit as st
+from pypdf import PdfReader
 
-st.set_page_config(page_title="CV ATS OPTIMIZER", layout="wide")
+# Configuración de página con estilo oscuro premium
+st.set_page_config(page_title="Optimizador de CV & Escáner ATS", layout="wide")
 
-# ESTILOS VISUALES INSPIRADOS EN ENHANCV
-st.markdown("""
-    <style>
-    .score-container {
-        background-color: #1e293b;
-        color: white;
-        padding: 30px;
-        border-radius: 15px;
-        text-align: center;
-        margin-bottom: 20px;
-    }
-    .score-number {
-        font-size: 64px;
-        font-weight: bold;
-        color: #f59e0b;
-    }
-    .card-pro {
-        background-color: #f0fdf4;
-        border-left: 5px solid #16a34a;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 10px;
-    }
-    .card-contra {
-        background-color: #fef2f2;
-        border-left: 5px solid #dc2626;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 10px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
+# Título Principal
 st.title("📊 OPTIMIZADOR DE CV & ESCÁNER ATS")
 st.subheader("APLICACIÓN INTERACTIVA DE DIAGNÓSTICO PROFESIONAL")
 
-col_panel, col_resultados = st.columns([1, 2])
+# Diseño de columnas para la interfaz
+col1, col2 = st.columns([1, 1.5])
 
-with col_panel:
-    st.header("📥 PANEL DE ENTRADA")
-    cv_input = st.text_area("PEGA TU CURRÍCULUM AQUÍ:", height=300, placeholder="Pega el texto de tu CV...")
-    vacante_input = st.text_area("PEGA LA OFERTA DE TRABAJO (OPCIONAL):", height=150, placeholder="Para buscar palabras clave...")
+with col1:
+    st.markdown("### 📥 PANEL DE ENTRADA")
     
-    calcular = st.button("🚀 INICIAR ESCANEO ATS", type="primary")
-
-with col_resultados:
-    if calcular and cv_input:
-        st.header("🔎 REPORTES DE EVALUACIÓN")
+    # Selector del formato en el que se ingresará el CV
+    metodo_entrada = st.radio("Selecciona cómo deseas ingresar tu CV:", ("Cargar archivo (PDF, DOCX, TXT)", "Pegar texto manualmente"))
+    
+    texto_cv = ""
+    
+    if metodo_entrada == "Cargar archivo (PDF, DOCX, TXT)":
+        archivo_cargado = st.file_uploader("Arrastra o selecciona tu currículum:", type=["pdf", "docx", "txt"])
         
-        # SIMULACIÓN DE CÁLCULO DE PUNTUACIÓN DE METRICAS
-        tiene_numeros = any(char.isdigit() for char in cv_input)
-        score = 78 if not tiene_numeros else 92
-        
-        st.markdown(f"""
-            <div class="score-container">
-                <h3>TU PUNTUACIÓN ESTIMADA</h3>
-                <div class="score-number">{score}/100</div>
-                <p>Análisis completado bajo estándares de reclutamiento internacional</p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # DESGLOSE DE ANÁLISIS INTERACTIVO
-        with st.expander("🟢 TASA DE ANÁLISIS ATS (FORMATO)", expanded=True):
-            st.success("¡Formato aprobado! El texto es 100% legible para los sistemas de escaneo automáticos.")
+        if archivo_cargado is not None:
+            nombre_archivo = archivo_cargado.name.lower()
             
-        with st.expander("🔴 CUANTIFICANDO EL IMPACTO (MÉTRICAS)"):
-            if not tiene_numeros:
-                st.markdown("""
-                    <div class="card-contra">
-                        <strong>CONTRA:</strong> Falta de datos numéricos y logros cuantificables en tu experiencia laboral.
-                    </div>
-                    <p>👉 <strong>CONSEJO DE OPTIMIZACIÓN:</strong> Modifica tus funciones para incluir porcentajes o cantidades. 
-                    En vez de 'Diseño de interiores de lujo', usa 'Diseño de [X] proyectos de interiores de lujo optimizando plazos en un [X]%'</p>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                    <div class="card-pro">
-                        <strong>PRO:</strong> Se detectaron métricas y números que demuestran el impacto de tu trabajo.
-                    </div>
-                """, unsafe_allow_html=True)
-                
-        with st.expander("⚠️ SEÑALES DE ALERTA DE RECURSOS HUMANOS (RED FLAGS)"):
-            st.warning("Revisa las fechas: El software detecta brechas temporales o inconsistencias en el orden cronológico de la educación o experiencia.")
+            # Procesar archivo PDF
+            if nombre_archivo.endswith('.pdf'):
+                try:
+                    lector_pdf = PdfReader(archivo_cargado)
+                    paginas_texto = [pagina.extract_text() for pagina in lector_pdf.pages if pagina.extract_text()]
+                    texto_cv = "\n".join(paginas_texto)
+                    st.success(f"✅ ¡PDF leído con éxito! ({len(lector_pdf.pages)} páginas)")
+                except Exception as e:
+                    st.error("Error al procesar el archivo PDF. Asegúrate de que no esté protegido o dañado.")
             
+            # Procesar archivo TXT
+            elif nombre_archivo.endswith('.txt'):
+                try:
+                    texto_cv = archivo_cargado.read().decode("utf-8")
+                    st.success("✅ ¡Archivo de texto leído con éxito!")
+                except Exception as e:
+                    st.error("Error al leer el archivo de texto.")
+            
+            # Procesar archivo DOCX (Word)
+            elif nombre_archivo.endswith('.docx'):
+                # Nota: Para leer DOCX de forma nativa en entornos complejos se requiere docx2txt. 
+                # Como alternativa limpia y ligera, leemos los metadatos de texto planos legibles.
+                try:
+                    import zipfile
+                    import xml.etree.ElementTree as ET
+                    with zipfile.ZipFile(archivo_cargado) as docx:
+                        arbol_xml = ET.fromstring(docx.read('word/document.xml'))
+                        namespace = {'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'}
+                        parrafos = [nodo.text for nodo in arbol_xml.iter() if nodo.tag.endswith('t')]
+                        texto_cv = "".join(parrafos)
+                    st.success("✅ ¡Documento Word leído con éxito!")
+                except Exception as e:
+                    st.error("Error al procesar el archivo Word. Intenta guardarlo como PDF o TXT.")
+                    
     else:
-        st.info("💡 Por favor, ingresa el texto de tu CV en el panel de la izquierda y haz clic en 'Iniciar Escaneo ATS' para ver los gráficos y resultados.")
+        texto_cv = st.text_area("PEGA TU CURRÍCULUM AQUÍ:", placeholder="Pega el texto de tu CV...", height=300)
+
+    # Espacio para las palabras clave del puesto al que aspiras
+    palabras_puesto = st.text_area("🎯 PALABRAS CLAVE O DESCRIPCIÓN DEL PUESTO:", placeholder="Pega los requerimientos del trabajo o las palabras clave aquí...", height=150)
+    
+    boton_escanear = st.button("Iniciar Escaneo ATS", type="primary")
+
+with col2:
+    st.markdown("### 📈 PANEL DE RESULTADOS")
+    
+    if boton_escanear:
+        if not texto_cv:
+            st.warning("⚠️ Por favor, carga un archivo válido o pega el texto de tu CV en el panel de la izquierda.")
+        elif not palabras_puesto:
+            st.warning("⚠️ Por favor, ingresa las palabras clave o la descripción del puesto para comparar.")
+        else:
+            with st.spinner("Analizando compatibilidad estructural..."):
+                # Limpieza básica para la simulación
+                palabras_cv = set(texto_cv.lower().split())
+                palabras_filtro = set(palabras_puesto.lower().replace(",", " ").replace(";", " ").split())
+                
+                # Filtrado de conectores cortos
+                palabras_filtro = {p for p in palabras_filtro if len(p) > 3}
+                
+                if palabras_filtro:
+                    coincidencias = palabras_cv.intersection(palabras_filtro)
+                    porcentaje = int((len(coincidencias) / len(palabras_filtro)) * 100)
+                else:
+                    coincidencias = set()
+                    porcentaje = 0
+                
+                # Mostrar métricas
+                st.metric(label="Porcentaje de Coincidencia ATS", value=f"{porcentaje}%")
+                
+                if porcentaje >= 75:
+                    st.success("🎉 ¡Excelente! Tu CV tiene una alta densidad de palabras clave para este puesto.")
+                elif porcentaje >= 40:
+                    st.info("⚡ Buen camino, pero se recomienda incluir más términos específicos detectados en la oferta.")
+                else:
+                    st.error("🚨 Alerta: Tu nivel de optimización es bajo. El filtro ATS podría descartarte.")
+                
+                # Mostrar desglose
+                st.markdown("#### Enlaces de coincidencia detectados:")
+                if coincidencias:
+                    st.write(", ".join(list(coincidencias)))
+                else:
+                    st.write("*No se encontraron palabras clave coincidentes directamente.*")
+    else:
+        st.info("💡 Por favor, configura tu CV y los requerimientos en el panel de la izquierda y haz clic en 'Iniciar Escaneo ATS' para ver los gráficos y resultados.")
